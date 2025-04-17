@@ -1,0 +1,301 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>WebViewer - STL</title>
+		<meta charset="utf-8">
+		<link rel="stylesheet" href="./jquery/jquery-ui.css">
+	</head>
+	<style>
+		*{margin:0px;padding:0px;}
+		#model {
+			float:left;
+		}
+		#operation{
+			float:left;
+			width: 400px;
+			margin-left: 40px;
+		}
+		#sliderdiv{
+			margin-top:30px;
+		}
+		#resetdiv{
+			margin-top: 60px;
+		}
+		.structure{float:left;width:100px;}
+		.sliders{float:left;width:200px;}
+		.item{
+			margin-top: 20px;
+			margin-bottom: 20px;
+		}
+		.btn{
+			font-size: 12px;
+		}
+		#loading {
+			position: absolute;
+			width: 100%;
+			height: 100%;
+			text-align:center;
+			background: white;
+			z-index: 9999
+		}
+		#main {z-index: 999;}
+	</style>
+	
+	<body>
+	<div id="loading">
+	<img src="./loading.gif" alt="">
+	</div>
+	<div id="main">
+		<div id="model">
+		
+		</div>
+		<div id="operation">
+			<div id="sliderdiv">
+		
+	<!--
+			<div class="item">
+				<div class="structure">主动脉</div>
+				<div id="slider1" class="sliders"></div>
+			</div>-->
+		
+			</div>
+			<div id="resetdiv">
+				<div style="float:left;width:100px;">重置</div>
+				<div style="float:left;"> 
+					<button class="btn" id="up">上</button>
+					<button class="btn" id="down">下</button>
+					<button class="btn" id="left">左</button>
+					<button class="btn" id="right">右</button>
+					<button class="btn" id="front">前</button>
+					<button class="btn" id="back">后</button>
+				</div>
+			</div>
+		</div>
+		
+	</div>
+	</body>
+	
+	<script src="./jquery/jquery-1.12.4.js"></script>
+	<script src="./jquery/jquery-ui.js"></script>
+	<script src="threejs/three.min.js"></script>
+	<script src="threejs/loaders/STLLoader.js"></script>
+	<script src="threejs/TrackballControls.js"></script>
+
+	<script>
+		var controls, camera, scene, renderer, modelindex, toumingdu,parent;
+		var resize = true;
+		var objects = {};
+		var modelindex = [];
+		var percents = {};
+		var move = {'x':0,'y':0,'z':0}
+		var dataid = getQueryVariable("dataid");
+		var type =getQueryVariable("type");
+		var prefix;
+		var timestamp = Date.parse(new Date());
+		if (type === '0') prefix = "/cardiac/aistl/";
+		else if (type === '1') prefix = "/cardiac/uploadstl/";
+		var files = [
+			{ "name": "心包", "filePath": prefix+dataid+"/EE.stl"+"?t="+timestamp, "color": "#C0C0C0", "opacity": 1, "visible": true},
+			{ "name": "左心室", "filePath": prefix+dataid+"/LV.stl"+"?t="+timestamp, "color": "#d37b91", "opacity": 1, "visible": true},
+			{ "name": "主动脉", "filePath": prefix+dataid+"/AO.stl"+"?t="+timestamp, "color": "#f01510", "opacity": 1, "visible": true},
+			{ "name": "右心室", "filePath": prefix+dataid+"/RV.stl"+"?t="+timestamp, "color": "#86E686", "opacity": 1, "visible": true},
+			{ "name": "右心房", "filePath": prefix+dataid+"/RA.stl"+"?t="+timestamp, "color": "#165E18", "opacity": 1, "visible": true},
+			{ "name": "肺动脉", "filePath": prefix+dataid+"/PA.stl"+"?t="+timestamp, "color": "#28bfe5", "opacity": 1, "visible": true},
+			{ "name": "左心房", "filePath": prefix+dataid+"/LA.stl"+"?t="+timestamp, "color": "#262CF9", "opacity": 1, "visible": true},
+			{ "name": "上腔静脉", "filePath": prefix+dataid+"/SVC.stl"+"?t="+timestamp, "color": "#f2f235", "opacity": 1, "visible": true},		
+			// { "name": "冠脉", "filePath": prefix+dataid+"/AC.stl"+"?t="+timestamp, "color": "#ff0000", "opacity": 1, "visible": true},
+			// 改动
+
+			];
+		init();
+		animate();
+		initslider();
+		initbutton();
+		function init() {
+			scene = new THREE.Scene();
+			scene.add(new THREE.AmbientLight(0x444444));
+			camera = new THREE.PerspectiveCamera(60, 0.6*window.innerWidth / window.innerHeight, 1, 5000);
+			// Z is up for objects intended to be 3D printed.
+			//camera.up.set( 0, 0, 1 );
+			// camera.position.set(30, 400, 0);
+			camera.position.set(0, 0, 300);
+			camera.add(new THREE.PointLight(0xffffff, 1));
+
+			scene.add(camera);
+			camera.position.set(0, -300, 0)
+            camera.lookAt(0, 0, 0);
+            camera.up.set(0, 0, 1);
+
+			renderer = new THREE.WebGLRenderer({ antialias: true });
+			renderer.setClearColor(0x000000);
+			//renderer.setPixelRatio(window.devicePixelRatio);
+			renderer.setSize(0.6*window.innerWidth, window.innerHeight);
+			document.getElementById('model').appendChild(renderer.domElement);
+			
+			parent = new THREE.Object3D();
+			scene.add(parent);
+			for (var i = 0; i < files.length; i++) {
+				loadfile(files[i].filePath, files[i].name, files[i].color, files[i].opacity, files[i].visible, i);
+			}
+
+			controls = new THREE.TrackballControls(camera,renderer.domElement);
+			controls.rotateSpeed = 5.0;
+			controls.zoomSpeed = 5;
+			controls.panSpeed = 2;
+			controls.staticMoving = true;
+			controls.dynamicDampingFactor = 0.3;
+			//controls.addEventListener('change', render);
+			window.addEventListener( 'resize', onWindowResize, false );
+		}
+
+		function loadfile(filePath, filename, filecolor, fileopacity, filevisible, fileindex) {
+			
+			var loader = new THREE.STLLoader();
+			loader.load(filePath, function (geometry) {
+				geometry.computeBoundingBox()
+				var material = new THREE.MeshLambertMaterial({ name: filename, color: filecolor, specular: 0x222222, shininess: 30, shading: THREE.SmoothShading, opacity: fileopacity, visible: filevisible/*,blending:THREE.AdditiveBlending,depthWrite:false*/ });
+				var mesh = new THREE.Mesh(geometry, material);
+				objects[fileindex] = mesh;
+				console.log(mesh)
+				// scene.add(mesh);
+				parent.add(mesh)
+				if (filename==="心包") {
+					move['x'] = - ( mesh.geometry.boundingBox.max.x + mesh.geometry.boundingBox.min.x ) / 2;
+					move['y'] =- ( mesh.geometry.boundingBox.max.y + mesh.geometry.boundingBox.min.y ) / 2;
+					move['z'] =- ( mesh.geometry.boundingBox.max.z + mesh.geometry.boundingBox.min.z ) / 2;
+				}			
+			});
+		}
+		function animate() {
+			requestAnimationFrame(animate);
+			controls.update();
+			render();
+		}
+		function render() {
+			// console.log("222");
+			if(Object.keys(objects).length==files.length) {
+					for (var i=0; i<files.length;i++) {
+					 moveToCenter(objects[i]);
+					 if(percents[i]<1){
+					  objects[i].material.transparent = true;
+					  objects[i].material.depthWrite = false;
+					 }else{
+					  objects[i].material.transparent = false;
+					  objects[i].material.depthWrite = true;
+					 }
+					 objects[i].material.opacity =percents[i];
+					}
+					$("#loading").hide();
+			}
+				
+				renderer.render( scene, camera );
+		}
+		
+		function moveToCenter(m) {
+			m.position.x = move['x'];
+			m.position.y = move['y'];
+			m.position.z = move['z'];
+		}
+
+		function onWindowResize() {
+
+				camera.aspect = 0.6*window.innerWidth / window.innerHeight;
+				camera.updateProjectionMatrix();
+
+				renderer.setSize( 0.6*window.innerWidth, window.innerHeight );
+
+		}
+		function clickfunc(){
+			// for(var i =0;i<files.length;i++){
+			// 	mesh = objects[i];
+			// 	mesh.rotation.x = Math.PI / 180 * 90;
+			// }
+			
+			
+		}
+		function initslider() {
+			let div = document.getElementById("sliderdiv")
+			
+			for (var i = 0; i < files.length;i++) {
+				var dd = document.createElement("div");
+				dd.setAttribute("class","item");
+				dd.innerHTML="<div class='structure'>"+
+									files[i].name+
+								"</div>"+
+								"<div id='slider"+i+"' class='sliders' style='background-color:"+files[i].color+";'>"+
+								"</div>"+
+								"<div style='clear:both;'></div>"
+				div.appendChild(dd)
+			}
+			for (var i = 0; i < files.length;i++) {
+				$( "#slider"+i).slider( {
+				min: 0,
+				max: 100,
+				slide: function( event, ui ) {
+					/*let id=event.target.id;
+					id = parseInt(id[id.length-1]);
+					objects[id].material.opacity = 1-ui.value/100	*/
+					let id=event.target.id;
+					id = parseInt(id[id.length-1])
+					percents[id]=1-ui.value/100;
+					
+					}	
+				});
+				percents[i] = 1;
+			}
+		}
+		function initbutton(){
+			$("#up").button().click(function( event ) {
+				controls.reset();
+				camera.position.set(0, 0, 300)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 1, 0);
+      		});
+			  $("#down").button().click(function( event ) {
+				controls.reset();
+				camera.position.set(0, 0, -300)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 1, 0);
+				
+      		});
+			  $("#left").button().click(function( event ) {
+				controls.reset();
+                camera.position.set(300, 0, 0)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 0, 1);
+				
+      		});
+			  $("#right").button().click(function( event ) {
+				  controls.reset();
+				camera.position.set(-300, 0, 0)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 0, 1);
+				
+      		});
+			  $("#front").button().click(function( event ) {
+				  controls.reset();
+				camera.position.set(0, -300, 0)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 0, 1);
+      		});
+			  $("#back").button().click(function( event ) {
+				  controls.reset();
+				camera.position.set(0, 300, 0)
+                camera.lookAt(0, 0, 0);
+                camera.up.set(0, 0, 1);
+      		});
+		}
+		function getQueryVariable(variable)
+		{
+			   var query = window.location.search.substring(1);
+			   var vars = query.split("&");
+			   for (var i=0;i<vars.length;i++) {
+					   var pair = vars[i].split("=");
+					   if(pair[0] == variable){return pair[1];}
+			   }
+			   return(false);
+		}
+				
+	</script>
+</html>
